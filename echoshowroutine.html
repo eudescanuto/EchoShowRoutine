@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Daily Care Board</title>
+  <style>
+    :root{
+      --bg:#0b1220; /* dark navy */
+      --card:#111827; /* slate-900 */
+      --text:#e5e7eb; /* gray-200 */
+      --muted:#9ca3af; /* gray-400 */
+      --accent:#60a5fa; /* blue-400 */
+      --good:#22c55e; /* green-500 */
+      --warn:#f59e0b; /* amber-500 */
+      --danger:#ef4444; /* red-500 */
+      --panel:#0d1324;
+      --morning:#ff6600; /* orange */
+      --midday:#0099cc;  /* blue */
+      --evening:#009933; /* green */
+      --night:#9966cc;   /* purple */
+    }
+    html,body{height:100%;}
+    body{
+      margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background:var(--bg); color:var(--text);
+      display:flex; align-items:center; justify-content:center;
+    }
+    .wrap{width:min(100%, 1000px); padding:24px;}
+
+    .board{background:var(--card); border-radius:24px; padding:28px; box-shadow: 0 10px 30px rgba(0,0,0,.4);}    
+    .row{display:flex; align-items:center; justify-content:space-between; gap:12px;}
+    .top{margin-bottom:18px}
+    h1{font-size: clamp(26px, 5vw, 42px); margin:0; letter-spacing:0.2px}
+    .subtitle{font-size: clamp(14px, 3vw, 18px); color:var(--muted)}
+    .tag{display:inline-flex; align-items:center; gap:8px; font-weight:700}
+    .dot{width:12px; height:12px; border-radius:999px; display:inline-block}
+
+    .controls{display:flex; gap:12px; flex-wrap:wrap}
+    .btn{appearance:none; border:none; background:#1f2937; color:var(--text); padding:10px 14px; border-radius:14px; font-size:16px; cursor:pointer}
+    .btn:active{transform:scale(.98)}
+    .btn-accent{background:var(--accent); color:#081223; font-weight:700}
+    .btn-ghost{background:transparent; border:1px solid #374151}
+    .btn[disabled]{opacity:.5; cursor:not-allowed}
+
+    .progressWrap{margin:14px 0 20px; background:#0b1220; border-radius:14px; padding:8px}
+    .progressBar{height:16px; background:#111827; border-radius:999px; overflow:hidden}
+    .progressBar > div{height:100%; width:0%; background:linear-gradient(90deg, var(--warn), var(--good)); transition:width .25s ease}
+    .progressText{display:flex; justify-content:space-between; font-size:14px; color:var(--muted); margin-top:8px}
+
+    .sectionTitle{margin:18px 0 8px; color:#cbd5e1; font-weight:700; letter-spacing:.2px}
+    .task{display:flex; gap:14px; align-items:center; background:#0f172a; border:1px solid #1f2937; padding:14px 16px; border-radius:16px}
+    .task + .task{margin-top:12px}
+    .task input[type="checkbox"]{width:28px; height:28px; accent-color: var(--accent);}    
+    .task label{font-size: clamp(18px, 3.6vw, 26px); cursor:pointer}
+    .task small{display:block; color:var(--muted); font-size:12px}
+
+    .list{margin-top:8px}
+
+    .footer{margin-top:18px; color:var(--muted); font-size:12px; text-align:center}
+    .pill{font-weight:700; padding:4px 10px; border-radius:999px; background:#1f2937; color:#d1d5db}
+
+    .diag{margin-top:16px; background:var(--panel); border:1px solid #1f2937; border-radius:14px; padding:12px; font-size:14px}
+    .diag h3{margin:0 0 8px 0; font-size:16px}
+    .pass{color:#22c55e}
+    .fail{color:#ef4444}
+
+    .hidden{display:none}
+    @media (orientation: landscape){
+      .list{columns:2; column-gap:16px}
+      .task{break-inside:avoid}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="board" role="region" aria-label="Daily Care Board">
+      <div class="row top">
+        <div>
+          <h1 id="title">Good morning</h1>
+          <div class="subtitle" id="subtitle">
+            <span class="tag" id="routineTag"><span class="dot" id="tagDot"></span><span id="tagText">Morning routine</span> • <span id="now"></span></span>
+          </div>
+        </div>
+        <div class="controls">
+          <button class="btn" id="switchBtn" aria-label="Switch routine"></button>
+          <button class="btn" id="resetBtn" aria-label="Reset checks for this routine">Reset</button>
+          <button class="btn" id="editBtn" aria-label="Edit tasks">Edit tasks</button>
+          <button class="btn" id="editPillsBtn" aria-label="Edit pills">Edit pills</button>
+          <button class="btn btn-accent" id="fullscreenBtn" aria-label="Fullscreen">Fullscreen</button>
+          <button class="btn btn-ghost" id="diagBtn" aria-label="Run self-tests">Self‑test</button>
+        </div>
+      </div>
+
+      <div class="progressWrap" aria-live="polite">
+        <div class="progressBar" aria-hidden="true"><div id="bar"></div></div>
+        <div class="progressText"><span id="doneText">0 of 0 done</span><span id="leftText">0 left</span></div>
+      </div>
+
+      <div class="list" id="list" role="list"></div>
+
+      <div class="footer">
+        <span class="pill" id="windowText">Windows: 07:00–09:00 • 12:00–13:30 • 18:00–20:00 • 21:15–23:59</span>
+        <div style="margin-top:6px">Legend: <span style="color:var(--morning)">● Morning</span> · <span style="color:var(--midday)">● Midday</span> · <span style="color:var(--evening)">● Evening</span> · <span style="color:var(--night)">● Night</span></div>
+      </div>
+
+      <div id="diag" class="diag hidden" role="region" aria-label="Diagnostics"></div>
+    </div>
+  </div>
+
+  <script>
+    // ========= SAFER STORAGE =========
+    const storage = {
+      getJSON(key, fallback){ try{ const v = localStorage.getItem(key); return v?JSON.parse(v):fallback; }catch{ return fallback } },
+      setJSON(key, obj){ try{ localStorage.setItem(key, JSON.stringify(obj)); return true; }catch{ return false } }
+    };
+
+    // ---- CONFIG ----
+    const DEFAULTS = {
+      morning: {
+        window: { start: "07:00", end: "09:00" },
+        greeting: "Good morning",
+        tasks: [
+          { id:"sunscreen", label:"🧴 Apply sunscreen (SPF 30+)", note:"Face, neck, ears" },
+          { id:"shower-am", label:"🚿 Take a shower" },
+          { id:"brush-am", label:"🪥 Brush your teeth" }
+        ]
+      },
+      midday: {
+        window: { start: "12:00", end: "13:30" },
+        greeting: "Good afternoon",
+        tasks: [ { id:"stretch", label:"🤸 Quick stretch / walk" } ]
+      },
+      evening: {
+        window: { start: "18:00", end: "20:00" },
+        greeting: "Good evening",
+        tasks: [ { id:"walk", label:"🚶 Post‑dinner walk (optional)" } ]
+      },
+      night: {
+        window: { start: "21:15", end: "23:59" },
+        greeting: "Good night",
+        tasks: [ { id:"winddown", label:"🛏️ Wind‑down: no screens 30 min" } ]
+      }
+    };
+
+    // Prefilled pills from your schedule
+    const DEFAULT_PILLS = {
+      morning: [
+        "Sertraline — 50 mg — water (same time daily)",
+        "Creatine monohydrate — 5 g — water",
+        "Ashwagandha (cycle) — 300–600 mg — empty stomach — 8 wks on / 4 wks off",
+        "Tongkat Ali (cycle) — 200–400 mg — can take fasted — 8–12 wks on / 4–8 wks off"
+      ],
+      midday: [
+        "Vitamin D3 — 2000–4000 IU — with fat",
+        "Vitamin B complex — as per label",
+        "Fenugreek (optional) — 500–600 mg — with food",
+        "Vitamin C — 500–1000 mg",
+        "Probiotic — 10–50B CFU — with food"
+      ],
+      evening: [
+        "Zinc — 15–25 mg — every other day — keep 2h away from Mg",
+        "Omega‑3 (EPA+DHA) — 2000 mg combined — with fatty meal",
+        "CoQ10 (ubiquinol) — 100–200 mg — with fat"
+      ],
+      night: [
+        "Magnesium glycinate — 300–400 mg elemental — avoid close to zinc"
+      ]
+    };
+
+    function getConfig(){ return storage.getJSON('careboard_config', DEFAULTS); }
+    function saveConfig(cfg){ storage.setJSON('careboard_config', cfg); }
+
+    function getPillConfig(){ return storage.getJSON('careboard_pills', DEFAULT_PILLS); }
+    function savePillConfig(cfg){ storage.setJSON('careboard_pills', cfg); }
+
+    // ---- Helpers ----
+    const $ = s=>document.querySelector(s);
+    const listEl = $('#list');
+    const titleEl = $('#title');
+    const subtitleEl = $('#subtitle');
+    const switchBtn = $('#switchBtn');
+    const resetBtn = $('#resetBtn');
+    const editBtn = $('#editBtn');
+    const editPillsBtn = $('#editPillsBtn');
+    const fullscreenBtn = $('#fullscreenBtn');
+    const diagBtn = $('#diagBtn');
+    const barEl = $('#bar');
+    const doneText = $('#doneText');
+    const leftText = $('#leftText');
+    const windowText = $('#windowText');
+    const diagEl = $('#diag');
+    const tagDot = $('#tagDot');
+    const tagText = $('#tagText');
+
+    const pad = n => String(n).padStart(2,'0');
+    const getNow = () => new Date();
+    const fmtTime = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const parseHM = hm => { const [h,m]=hm.split(":").map(Number); return {h,m}; };
+
+    function inWindow(now, startHM, endHM){
+      const d = new Date(now);
+      const s = parseHM(startHM); const e = parseHM(endHM);
+      const start = new Date(d); start.setHours(s.h, s.m, 0, 0);
+      const end   = new Date(d); end.setHours(e.h, e.m, 59, 999);
+      return now >= start && now <= end;
+    }
+
+    function dayKey(date){
+      return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`; // YYYY-MM-DD
+    }
+
+    function routineKey(routine){
+      const date = getNow();
+      return `careboard_${routine}_${dayKey(date)}`;
+    }
+
+    function getChecks(routine){ return storage.getJSON(routineKey(routine), {}); }
+    function setChecks(routine, checks){ storage.setJSON(routineKey(routine), checks); }
+
+    const ORDER = ['morning','midday','evening','night'];
+    const TAG = {
+      morning: {text:'Morning routine', color:'var(--morning)'},
+      midday:  {text:'Midday routine',  color:'var(--midday)'},
+      evening: {text:'Evening routine', color:'var(--evening)'},
+      night:   {text:'Night routine',   color:'var(--night)'}
+    };
+
+    function detectRoutine(cfg){
+      const now = getNow();
+      for(const rt of ORDER){
+        const w = cfg[rt].window;
+        if(inWindow(now, w.start, w.end)) return rt;
+      }
+      // Outside all windows: choose next upcoming by time
+      const hm = fmtTime(now);
+      for(const rt of ORDER){ if(hm < cfg[rt].window.start) return rt; }
+      return 'morning'; // after last window, prepare for next day's morning
+    }
+
+    // ---- Rendering ----
+    let CONFIG = getConfig();
+    let PILL_CFG = getPillConfig();
+    let active = detectRoutine(CONFIG);
+
+    function render(){
+      const block = CONFIG[active];
+      titleEl.textContent = block.greeting;
+      const t = TAG[active];
+      tagDot.style.background = t.color; tagText.textContent = t.text;
+      subtitleEl.querySelector('#now').textContent = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+
+      // Next routine label for switch
+      const idx = ORDER.indexOf(active);
+      const next = ORDER[(idx+1)%ORDER.length];
+      switchBtn.textContent = `Switch to ${TAG[next].text.replace(' routine','')}`;
+
+      windowText.textContent = `Windows: ${CONFIG.morning.window.start}–${CONFIG.morning.window.end} • ${CONFIG.midday.window.start}–${CONFIG.midday.window.end} • ${CONFIG.evening.window.start}–${CONFIG.evening.window.end} • ${CONFIG.night.window.start}–${CONFIG.night.window.end}`;
+
+      const checks = getChecks(active);
+      listEl.innerHTML = '';
+
+      // Pills section first
+      const pills = PILL_CFG[active] || [];
+      if(pills.length){
+        const h = document.createElement('div'); h.className = 'sectionTitle'; h.textContent = 'Pills'; listEl.appendChild(h);
+        pills.forEach((pill, i)=>{
+          const idKey = `pill-${slug(pill)}-${i}`;
+          const id = `cb-${idKey}`;
+          const wrap = document.createElement('div'); wrap.className='task'; wrap.role='listitem';
+          const input = document.createElement('input'); input.type='checkbox'; input.id=id; input.checked=!!checks[idKey];
+          input.addEventListener('change',()=>{ const c=getChecks(active); c[idKey]=input.checked; setChecks(active,c); updateProgress(); });
+          const label = document.createElement('label'); label.setAttribute('for',id); label.innerHTML = `💊 ${pill}`;
+          wrap.appendChild(input); wrap.appendChild(label); listEl.appendChild(wrap);
+        });
+      }
+
+      // Routine tasks
+      if((block.tasks||[]).length){
+        const h2 = document.createElement('div'); h2.className='sectionTitle'; h2.textContent='Other'; listEl.appendChild(h2);
+        block.tasks.forEach(task => {
+          const id = `cb-${task.id}`;
+          const wrap = document.createElement('div');
+          wrap.className = 'task';
+          wrap.role = 'listitem';
+
+          const input = document.createElement('input');
+          input.type = 'checkbox';
+          input.id = id;
+          input.checked = !!checks[task.id];
+          input.addEventListener('change', ()=>{
+            const c = getChecks(active);
+            c[task.id] = input.checked;
+            setChecks(active, c);
+            updateProgress();
+          });
+
+          const label = document.createElement('label');
+          label.setAttribute('for', id);
+          label.innerHTML = `${task.label}${task.note?`<small>${task.note}</small>`:''}`;
+
+          wrap.appendChild(input); wrap.appendChild(label);
+          listEl.appendChild(wrap);
+        });
+      }
+
+      updateProgress();
+      updateFullscreenAbility();
+    }
+
+    function updateProgress(){
+      const tasks = [...(CONFIG[active].tasks||[])];
+      const pills = PILL_CFG[active] || [];
+      const checks = getChecks(active);
+      const pillIds = pills.map((pill,i)=>`pill-${slug(pill)}-${i}`);
+      const taskIds = tasks.map(t=>t.id);
+      const allIds = [...pillIds, ...taskIds];
+      const done = allIds.filter(id => checks[id]).length;
+      const pct = allIds.length ? Math.round((done / allIds.length) * 100) : 0;
+      barEl.style.width = pct + '%';
+      doneText.textContent = `${done} of ${allIds.length} done`;
+      leftText.textContent = `${allIds.length - done} left`;
+    }
+
+    // ========= Fullscreen (safe) =========
+    function canAttemptFullscreen(){
+      return typeof document !== 'undefined' && !!document.documentElement.requestFullscreen;
+    }
+
+    function updateFullscreenAbility(){
+      if(!canAttemptFullscreen()){
+        fullscreenBtn.disabled = true;
+        fullscreenBtn.title = 'Fullscreen not supported in this context';
+      }else{
+        fullscreenBtn.disabled = false;
+        fullscreenBtn.title = 'Enter/exit fullscreen';
+      }
+    }
+
+    async function toggleFullscreen(){
+      if(!canAttemptFullscreen()) return;
+      try{
+        if(!document.fullscreenElement){
+          await document.documentElement.requestFullscreen();
+        }else{
+          await document.exitFullscreen?.();
+        }
+      }catch(err){
+        logDiag(`<span class="fail">Fullscreen blocked by permissions policy:</span> ${err?.message || err}`);
+        fullscreenBtn.disabled = true;
+      }
+    }
+
+    // ---- Events ----
+    switchBtn.addEventListener('click', ()=>{
+      const idx = ORDER.indexOf(active);
+      active = ORDER[(idx+1)%ORDER.length];
+      render();
+    });
+
+    resetBtn.addEventListener('click', ()=>{
+      if(confirm('Reset all checks for the current routine?')){
+        setChecks(active, {}); render();
+      }
+    });
+
+    editBtn.addEventListener('click', ()=>{
+      const current = (CONFIG[active].tasks||[]).map(t=>t.label).join('\n');
+      const out = prompt(`Edit ${TAG[active].text} tasks. One per line. Use emojis if you like.`, current);
+      if(out === null) return;
+      const lines = out.split(/\n+/).map(s=>s.trim()).filter(Boolean);
+      if(!lines.length) return alert('No tasks provided.');
+      CONFIG[active].tasks = lines.map((label,i)=>({ id: slug(label) + '-' + i, label }));
+      saveConfig(CONFIG);
+      setChecks(active, {});
+      render();
+    });
+
+    editPillsBtn.addEventListener('click', ()=>{
+      const current = (PILL_CFG[active]||[]).join('\n');
+      const out = prompt(`Edit ${TAG[active].text} pills. One per line. Include dose if helpful.`, current);
+      if(out === null) return;
+      const lines = out.split(/\n+/).map(s=>s.trim()).filter(Boolean);
+      PILL_CFG[active] = lines;
+      savePillConfig(PILL_CFG);
+      setChecks(active, {}); // reset checks for that routine
+      render();
+    });
+
+    fullscreenBtn.addEventListener('click', toggleFullscreen);
+
+    diagBtn.addEventListener('click', ()=>{ runSelfTests(); });
+
+    function slug(s){ return s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,''); }
+
+    // Clock updater & auto-switch
+    setInterval(()=>{
+      const now = new Date();
+      const timeEl = document.getElementById('now');
+      if(timeEl) timeEl.textContent = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+
+      const detected = detectRoutine(CONFIG);
+      if(detected !== active){ active = detected; render(); }
+    }, 15 * 1000);
+
+    // ========= Diagnostics / Test Cases =========
+    function logDiag(html){ diagEl.classList.remove('hidden'); diagEl.innerHTML += `<div>${html}</div>`; }
+    function clearDiag(){ diagEl.innerHTML = '<h3>Self‑tests</h3>'; diagEl.classList.remove('hidden'); }
+
+    function testDetectAt(hm){
+      const d = new Date();
+      const [H,M] = hm.split(':').map(Number);
+      d.setHours(H,M,0,0);
+      const oldGetNow = getNow;
+      window.getNow = () => d; // monkey patch for test
+      const r = detectRoutine(CONFIG);
+      window.getNow = oldGetNow; // restore
+      return r;
+    }
+
+    function runSelfTests(){
+      clearDiag();
+      // Test 1: Storage round‑trip
+      const testKey = 'careboard_test_key';
+      const ok1 = storage.setJSON(testKey, {a:1});
+      const got = storage.getJSON(testKey, null);
+      const ok2 = got && got.a === 1;
+      logDiag(`<strong>Storage:</strong> ${ok1 && ok2 ? '<span class="pass">PASS</span>' : '<span class="fail">FAIL</span>'}`);
+
+      // Test 2: Routine detection must return one of four
+      const r = detectRoutine(CONFIG);
+      const ok3 = ['morning','midday','evening','night'].includes(r);
+      logDiag(`<strong>Routine detect (current time):</strong> ${ok3 ? '<span class="pass">PASS</span>' : '<span class="fail">FAIL</span>'} (got: ${r})`);
+
+      // Test 3: Fullscreen capability check (won't force fullscreen)
+      const ok4 = !!document.documentElement.requestFullscreen;
+      logDiag(`<strong>Fullscreen API present:</strong> ${ok4 ? '<span class="pass">YES</span>' : '<span class="fail">NO</span>'}`);
+
+      // Test 4: Progress calculation with pills + tasks (synthetic)
+      const tmpChecks = {};
+      const tmpPills = ['A','B'];
+      const tmpTasks = [{id:'t1'},{id:'t2'},{id:'t3'}];
+      const ids = [...tmpPills.map((p,i)=>`pill-${slug(p)}-${i}`), ...tmpTasks.map(t=>t.id)];
+      ['pill-a-0','t2'].forEach(id=> tmpChecks[id]=true );
+      const done = ids.filter(id=> tmpChecks[id]).length;
+      const ok5 = done === 2 && ids.length === 5;
+      logDiag(`<strong>Progress math:</strong> ${ok5 ? '<span class="pass">PASS</span>' : '<span class="fail">FAIL</span>'} (done=${done}, total=${ids.length})`);
+
+      // Test 5: Time window classification at fixed times
+      const t1 = testDetectAt('07:30') === 'morning';
+      const t2 = testDetectAt('12:10') === 'midday';
+      const t3 = testDetectAt('18:30') === 'evening';
+      const t4 = testDetectAt('21:45') === 'night';
+      logDiag(`<strong>Window mapping:</strong> ${(t1&&t2&&t3&&t4) ? '<span class="pass">PASS</span>' : '<span class="fail">FAIL</span>'}`);
+    }
+
+    // Initial render
+    render();
+  </script>
+</body>
+</html>
